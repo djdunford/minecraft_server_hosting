@@ -46,6 +46,10 @@ Parameters:
     Type: String
     Default: 10.192.21.0/24
 
+  AdminCidr:
+    Description: IP address in CIDR format for admin access
+    Type: String
+
 Resources:
   HelloWorldFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -245,6 +249,33 @@ Resources:
       GroupName: "no-ingress-sg"
       GroupDescription: "Security group with no ingress rule"
       VpcId: !Ref VPC
+
+  ServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "server-sg"
+      GroupDescription: "Security group with server ingress"
+      VpcId: !Ref VPC
+
+  ServerAdminIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIp: !Ref AdminCidr
+      Description: SSH access
+      FromPort: 22
+      GroupId: !GetAtt ServerSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 22
+
+  ServerAccessIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIp: "0.0.0.0/0"
+      Description: SSH access
+      FromPort: 19132
+      GroupId: !GetAtt ServerSecurityGroup.GroupId
+      IpProtocol: udp
+      ToPort: 19132
 
 Outputs:
   VPC:
