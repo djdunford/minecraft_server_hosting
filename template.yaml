@@ -1,12 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  minecraft_server_control
-
-  Sample SAM Template for minecraft_server_control
-
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
-
+Description: LAMP / Prestashop stack
 Globals:
   Function:
     Timeout: 3
@@ -50,67 +44,11 @@ Parameters:
     Description: IP address in CIDR format for admin access
     Type: String
 
-  LatestUbuntuFocalAMI:
+  LatestAmazonLinuxAMI:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/canonical/ubuntu/server/focal/stable/current/amd64/hvm/ebs-gp2/ami-id
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-arm64
 
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Properties:
-      CodeUri: hello-world/
-      Handler: app.lambdaHandler
-      Runtime: nodejs18.x
-      Architectures:
-      - x86_64
-      Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /hello
-            Method: get
-    Metadata: # Manage esbuild properties
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2020
-        Sourcemap: true
-        EntryPoints:
-        - app.ts
-
-  Artefacts:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-artefacts"
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - BucketKeyEnabled: true
-            ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      OwnershipControls:
-        Rules:
-          - ObjectOwnership: BucketOwnerEnforced
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  ApplicationResourceGroup:
-    Type: AWS::ResourceGroups::Group
-    Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
-      ResourceQuery:
-        Type: CLOUDFORMATION_STACK_1_0
-
-  ApplicationInsightsMonitoring:
-    Type: AWS::ApplicationInsights::Application
-    Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
-
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -145,17 +83,6 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
 
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
-      CidrBlock: !Ref PublicSubnet2CIDR
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
-
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -167,28 +94,20 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
 
-  PrivateSubnet2:
-    Type: AWS::EC2::Subnet
+  EC2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
     Properties:
-      VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
-      CidrBlock: !Ref PrivateSubnet2CIDR
-      MapPublicIpOnLaunch: false
+      Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+          Value: Prestashop EC2 instance
 
-  NatGateway1EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
+  EC2EIPAssociation:
+    Type: AWS::EC2::EIPAssociation
     Properties:
-      Domain: vpc
-
-  NatGateway2EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
+      AllocationId: !GetAtt EC2EIP.AllocationId
+      InstanceId: !Ref EC2Instance
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -212,13 +131,6 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
 
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet2
-
-
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -232,27 +144,6 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateSubnet1
-
-  PrivateRouteTable2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName} Private Routes (AZ2)
-
-  PrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      SubnetId: !Ref PrivateSubnet2
-
-  NoIngressSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: "no-ingress-sg"
-      GroupDescription: "Security group with no ingress rule"
-      VpcId: !Ref VPC
 
   ServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -275,64 +166,62 @@ Resources:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       CidrIp: "0.0.0.0/0"
-      Description: UDP Minecraft server access
-      FromPort: 19132
+      Description: http access
+      FromPort: 80
       GroupId: !GetAtt ServerSecurityGroup.GroupId
-      IpProtocol: udp
-      ToPort: 19132
+      IpProtocol: tcp
+      ToPort: 80
 
-  ServerBucketReadRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - ec2.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      Path: /
-      Policies:
-        - PolicyName: S3-read-only-access
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource:
-                  - !Sub "arn:aws:s3:::${Artefacts}"
-                  - !Sub "arn:aws:s3:::${Artefacts}/*"
+#  ServerBucketReadRole:
+#    Type: AWS::IAM::Role
+#    Properties:
+#      AssumeRolePolicyDocument:
+#        Version: "2012-10-17"
+#        Statement:
+#          - Effect: Allow
+#            Principal:
+#              Service:
+#                - ec2.amazonaws.com
+#            Action:
+#              - 'sts:AssumeRole'
+#      Path: /
+#      Policies:
+#        - PolicyName: S3-read-only-access
+#          PolicyDocument:
+#            Version: "2012-10-17"
+#            Statement:
+#              - Effect: Allow
+#                Action:
+#                  - s3:GetObject
+#                  - s3:ListBucket
+#                Resource:
+#                  - !Sub "arn:aws:s3:::${Artefacts}"
+#                  - !Sub "arn:aws:s3:::${Artefacts}/*"
 
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref LatestUbuntuFocalAMI
+      ImageId: !Ref LatestAmazonLinuxAMI
       KeyName: !Ref KeyPair
-      IamInstanceProfile: !Ref InstanceProfile
-      InstanceType: t2.medium
+#      IamInstanceProfile: !Ref InstanceProfile
+      InstanceType: t4g.nano
       SecurityGroupIds:
         - !Ref ServerSecurityGroup
       SubnetId: !Ref PublicSubnet1
       BlockDeviceMappings:
-        -
-          DeviceName: /dev/sda1
+        - DeviceName: /dev/xvda
           Ebs:
-            VolumeSize: 50
-#        -
-#          DeviceName: /dev/sdm
-#          Ebs:
-#            VolumeSize: 100
+            VolumeType: gp3
+            VolumeSize: 8
+            DeleteOnTermination: false
+            Encrypted: true
 
-  InstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
-    Properties:
-      Path: /
-      Roles:
-        - !Ref ServerBucketReadRole
+#  InstanceProfile:
+#    Type: 'AWS::IAM::InstanceProfile'
+#    Properties:
+#      Path: /
+#      Roles:
+#        - !Ref ServerBucketReadRole
 
   KeyPair:
     Type: AWS::EC2::KeyPair
@@ -347,41 +236,16 @@ Outputs:
 
   PublicSubnets:
     Description: A list of the public subnets
-    Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2 ]]
+    Value: !Join [ ",", [ !Ref PublicSubnet1 ]]
 
   PrivateSubnets:
     Description: A list of the private subnets
-    Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]]
+    Value: !Join [ ",", [ !Ref PrivateSubnet1 ]]
 
   PublicSubnet1:
     Description: A reference to the public subnet in the 1st Availability Zone
     Value: !Ref PublicSubnet1
 
-  PublicSubnet2:
-    Description: A reference to the public subnet in the 2nd Availability Zone
-    Value: !Ref PublicSubnet2
-
   PrivateSubnet1:
     Description: A reference to the private subnet in the 1st Availability Zone
     Value: !Ref PrivateSubnet1
-
-  PrivateSubnet2:
-    Description: A reference to the private subnet in the 2nd Availability Zone
-    Value: !Ref PrivateSubnet2
-
-  NoIngressSecurityGroup:
-    Description: Security group with no ingress rule
-    Value: !Ref NoIngressSecurityGroup
-
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: API Gateway endpoint URL for Prod stage for Hello World function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: Hello World Lambda Function ARN
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: Implicit IAM Role created for Hello World function
-    Value: !GetAtt HelloWorldFunctionRole.Arn
