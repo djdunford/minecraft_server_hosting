@@ -50,6 +50,10 @@ Parameters:
     Description: IP address in CIDR format for admin access
     Type: String
 
+  LatestUbuntuFocalAMI:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/focal/stable/current/amd64/hvm/ebs-gp2/ami-id
+
 Resources:
   HelloWorldFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -271,11 +275,70 @@ Resources:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       CidrIp: "0.0.0.0/0"
-      Description: SSH access
+      Description: UDP Minecraft server access
       FromPort: 19132
       GroupId: !GetAtt ServerSecurityGroup.GroupId
       IpProtocol: udp
       ToPort: 19132
+
+  ServerBucketReadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: S3-read-only-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${Artefacts}"
+                  - !Sub "arn:aws:s3:::${Artefacts}/*"
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestUbuntuFocalAMI
+      KeyName: !Ref KeyPair
+      IamInstanceProfile: !Ref InstanceProfile
+      InstanceType: t2.medium
+      SecurityGroupIds:
+        - !Ref ServerSecurityGroup
+      SubnetId: !Ref PublicSubnet1
+      BlockDeviceMappings:
+        -
+          DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 50
+#        -
+#          DeviceName: /dev/sdm
+#          Ebs:
+#            VolumeSize: 100
+
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref ServerBucketReadRole
+
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: MinecraftKeyPair
+      PublicKeyMaterial: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCcv6/40kT3czgeeCSzr5bZqRAmBr8xJxbG/qTZxYsiu31aO4Zn84wbsCIm+3UAra1dXXMbEq5Zgp9R9lf7RkblB+ty4HesSqlDioPTs4bNTWbPFFC9JHUQNZiO6Sg6NMGHgJnswQVExoCcqrtnr6LUUcV9O7Cjruj3azR++huB7UcU+QuSKAVDP3rBy7UCYizsb+kotHXe0woMtT9qyBXigMrzl+hMMeI6Po27JMVXCLPp2ilizpxrv6cQCbG2sl/A4ocrZkVLk2o8s1Y+AXDt+IA+5pzWpA7NJ8etQEtvZ4I/QWpEYv61mVvDIHGfvl2rC2QBwRJlsvmx8tm7hJ2qgo3NQKRyPppUeq8Ppoexj/IdCNakY7LwCANq+tRu21Z8TfkMiAX2Gm8/BHW7uLe39BYfn2OAUZIknFnKI0oT0De3Tq4gYlT/wP7v8Qlf2YlJwOFjKmH+EAGLtckUjon8eu8mWkdYEwjyY7pNsVKikbPxeMzdaR8YeV9JHoV40oE= ddunford@UK-RXY2Y22G2X
 
 Outputs:
   VPC:
