@@ -238,7 +238,7 @@ Resources:
   KeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
-      KeyName: MinecraftKeyPair
+      KeyName: PrestashopKeyPair
       PublicKeyMaterial: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCcv6/40kT3czgeeCSzr5bZqRAmBr8xJxbG/qTZxYsiu31aO4Zn84wbsCIm+3UAra1dXXMbEq5Zgp9R9lf7RkblB+ty4HesSqlDioPTs4bNTWbPFFC9JHUQNZiO6Sg6NMGHgJnswQVExoCcqrtnr6LUUcV9O7Cjruj3azR++huB7UcU+QuSKAVDP3rBy7UCYizsb+kotHXe0woMtT9qyBXigMrzl+hMMeI6Po27JMVXCLPp2ilizpxrv6cQCbG2sl/A4ocrZkVLk2o8s1Y+AXDt+IA+5pzWpA7NJ8etQEtvZ4I/QWpEYv61mVvDIHGfvl2rC2QBwRJlsvmx8tm7hJ2qgo3NQKRyPppUeq8Ppoexj/IdCNakY7LwCANq+tRu21Z8TfkMiAX2Gm8/BHW7uLe39BYfn2OAUZIknFnKI0oT0De3Tq4gYlT/wP7v8Qlf2YlJwOFjKmH+EAGLtckUjon8eu8mWkdYEwjyY7pNsVKikbPxeMzdaR8YeV9JHoV40oE= ddunford@UK-RXY2Y22G2X
 
   LoggingBucket:
@@ -318,7 +318,7 @@ Resources:
           QueryStringsConfig:
             QueryStringBehavior: none
 
-  PictureDistribution:
+  Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
@@ -354,11 +354,18 @@ Resources:
           Bucket: !Sub "${LoggingBucket}.s3.amazonaws.com"
           IncludeCookies: false
           Prefix: ""
+        Aliases:
+          - breezingclothing.co.uk
+          - www.breezingclothing.co.uk
+        ViewerCertificate:
+          AcmCertificateArn: arn:aws:acm:us-east-1:430828578942:certificate/7f6a8e31-3f17-49dd-a6e8-5385c631916e
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
 
-  PictureDistributionMonitoringSubscription:
+  DistributionMonitoringSubscription:
     Type: AWS::CloudFront::MonitoringSubscription
     Properties:
-      DistributionId: !Ref PictureDistribution
+      DistributionId: !Ref Distribution
       MonitoringSubscription:
         RealtimeMetricsSubscriptionConfig:
           RealtimeMetricsSubscriptionStatus: "Enabled"
