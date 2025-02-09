@@ -40,7 +40,7 @@ Parameters:
   IndexDocument:
     Type: String
     Description: "The index document"
-    Default: "index.html"
+    Default: "index.php"
 
   ErrorDocument:
     Type: String
@@ -174,7 +174,7 @@ Resources:
       IpProtocol: tcp
       ToPort: 22
 
-  ServerAccessIngress:
+  ServerAccessHttpIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       CidrIp: "0.0.0.0/0"
@@ -184,7 +184,17 @@ Resources:
       IpProtocol: tcp
       ToPort: 80
 
-#  ServerBucketReadRole:
+#  ServerAccessHttpsIngress:
+#    Type: AWS::EC2::SecurityGroupIngress
+#    Properties:
+#      CidrIp: "0.0.0.0/0"
+#      Description: https access
+#      FromPort: 443
+#      GroupId: !GetAtt ServerSecurityGroup.GroupId
+#      IpProtocol: tcp
+#      ToPort: 443
+
+  #  ServerBucketReadRole:
 #    Type: AWS::IAM::Role
 #    Properties:
 #      AssumeRolePolicyDocument:
@@ -213,7 +223,7 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-049e8c03e4805e679
+      ImageId: ami-00a89065114e84516
       KeyName: !Ref KeyPair
 #      IamInstanceProfile: !Ref InstanceProfile
       InstanceType: t4g.nano
@@ -274,12 +284,12 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
 
-  OriginAccessIdentity:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
-    Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: !Ref AWS::StackName
-
+#  OriginAccessIdentity:
+#    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+#    Properties:
+#      CloudFrontOriginAccessIdentityConfig:
+#        Comment: !Ref AWS::StackName
+#
   RewriteRequestStaticFunction:
     Type: AWS::CloudFront::Function
     Properties:
@@ -338,14 +348,22 @@ Resources:
               HTTPPort: 80
               OriginProtocolPolicy: http-only
         DefaultCacheBehavior:
-          Compress: 'true'
+          Compress: false
+          CachedMethods:
+            - GET
+            - HEAD
           AllowedMethods:
             - GET
             - HEAD
             - OPTIONS
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
           TargetOriginId: root
           CachePolicyId: !Ref NoCachePolicy
-          ViewerProtocolPolicy: redirect-to-https
+          ViewerProtocolPolicy: https-only
+          OriginRequestPolicyId: !Ref DistributionPolicy
           FunctionAssociations:
             - EventType: viewer-request
               FunctionARN: !GetAtt RewriteRequestStaticFunction.FunctionMetadata.FunctionARN
@@ -361,6 +379,18 @@ Resources:
           AcmCertificateArn: arn:aws:acm:us-east-1:430828578942:certificate/7f6a8e31-3f17-49dd-a6e8-5385c631916e
           MinimumProtocolVersion: TLSv1.2_2021
           SslSupportMethod: sni-only
+
+  DistributionPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        CookiesConfig:
+          CookieBehavior: all
+        HeadersConfig:
+          HeaderBehavior: allViewer
+        Name: passthrough
+        QueryStringsConfig:
+          QueryStringBehavior: all
 
   DistributionMonitoringSubscription:
     Type: AWS::CloudFront::MonitoringSubscription
