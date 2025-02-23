@@ -330,6 +330,7 @@ Resources:
 
   Distribution:
     Type: AWS::CloudFront::Distribution
+    DependsOn: EC2Instance
     Properties:
       DistributionConfig:
         Enabled: 'true'
@@ -347,6 +348,13 @@ Resources:
             CustomOriginConfig:
               HTTPPort: 80
               OriginProtocolPolicy: http-only
+            OriginCustomHeaders:
+              - HeaderName: X-Forwarded-Proto
+                HeaderValue: https
+              - HeaderName: X-Scheme
+                HeaderValue: https
+              - HeaderName: SSL
+                HeaderValue: "on"
         DefaultCacheBehavior:
           Compress: false
           CachedMethods:
