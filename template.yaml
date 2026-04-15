@@ -31,53 +31,16 @@ Parameters:
     Type: String
     Default: 10.192.10.0/24
 
-  # PublicSubnet2CIDR:
-  #   Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
-  #   Type: String
-  #   Default: 10.192.11.0/24
-
   PrivateSubnet1CIDR:
     Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
     Type: String
     Default: 10.192.20.0/24
-
-  # PrivateSubnet2CIDR:
-  #   Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
-  #   Type: String
-  #   Default: 10.192.21.0/24
-
-  AdminCidr:
-    Description: IP address in CIDR format for admin access
-    Type: String
 
   LatestUbuntuFocalAMI:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/canonical/ubuntu/server/noble/stable/current/amd64/hvm/ebs-gp3/ami-id
 
 Resources:
-  # HelloWorldFunction:
-  #   Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-  #   Properties:
-  #     CodeUri: hello-world/
-  #     Handler: app.lambdaHandler
-  #     Runtime: nodejs18.x
-  #     Architectures:
-  #     - x86_64
-  #     Events:
-  #       HelloWorld:
-  #         Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-  #         Properties:
-  #           Path: /hello
-  #           Method: get
-  #   Metadata: # Manage esbuild properties
-  #     BuildMethod: esbuild
-  #     BuildProperties:
-  #       Minify: true
-  #       Target: es2020
-  #       Sourcemap: true
-  #       EntryPoints:
-  #       - app.ts
-
   Artefacts:
     Type: AWS::S3::Bucket
     Properties:
@@ -167,29 +130,12 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
 
-  NoIngressSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: "no-ingress-sg"
-      GroupDescription: "Security group with no ingress rule"
-      VpcId: !Ref VPC
-
   ServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: "server-sg"
       GroupDescription: "Security group with server ingress"
       VpcId: !Ref VPC
-
-  ServerAdminIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      CidrIp: !Ref AdminCidr
-      Description: SSH access
-      FromPort: 22
-      GroupId: !GetAtt ServerSecurityGroup.GroupId
-      IpProtocol: tcp
-      ToPort: 22
 
   ServerAccessIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -200,6 +146,26 @@ Resources:
       GroupId: !GetAtt ServerSecurityGroup.GroupId
       IpProtocol: udp
       ToPort: 19132
+
+  ServerAccessEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: !Ref VpcCIDR
+      Description: SSH access
+      ToPort: 22
+      FromPort: 22
+      GroupId: !GetAtt ServerSecurityGroup.GroupId
+      IpProtocol: tcp
+
+  SystemsManagerEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: SSH access
+      ToPort: 443
+      FromPort: 443
+      GroupId: !GetAtt ServerSecurityGroup.GroupId
+      IpProtocol: tcp
 
   ServerBucketReadRole:
     Type: AWS::IAM::Role
@@ -214,6 +180,8 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Policies:
         - PolicyName: S3-read-only-access
           PolicyDocument:
@@ -230,14 +198,7 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref LatestUbuntuFocalAMI
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINgLaHEfYev37isTsbpSYeRdf377//Hik9PleAEahqY6 djdun@Gizmo" > /home/ubuntu/.ssh/authorized_keys
-          echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAfYyVP2IL6lQBgW46CoqpZ7NBdoQE68oeZc07GhxgBt ddunford@m4mbp" >> /home/ubuntu/.ssh/authorized_keys
-          chown ubuntu: /home/ubuntu/.ssh/authorized_keys
-          chmod 0600 /home/ubuntu/.ssh/authorized_keys
+      ImageId: "ami-0cec26c926d826bc5"  # Amazon Linux 2023
       IamInstanceProfile: !Ref InstanceProfile
       InstanceType: t3.xlarge
       SecurityGroupIds:
@@ -245,9 +206,9 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       BlockDeviceMappings:
         -
-          DeviceName: /dev/sda1
+          DeviceName: /dev/xvda
           Ebs:
-            VolumeSize: 50
+            VolumeSize: 16
 
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
@@ -265,39 +226,6 @@ Outputs:
     Description: A list of the public subnets
     Value: !Join [ ",", [ !Ref PublicSubnet1 ]]
 
-  PrivateSubnets:
-    Description: A list of the private subnets
-    Value: !Join [ ",", [ !Ref PrivateSubnet1 ]]
-
   PublicSubnet1:
     Description: A reference to the public subnet in the 1st Availability Zone
     Value: !Ref PublicSubnet1
-
-  # PublicSubnet2:
-  #   Description: A reference to the public subnet in the 2nd Availability Zone
-  #   Value: !Ref PublicSubnet2
-
-  PrivateSubnet1:
-    Description: A reference to the private subnet in the 1st Availability Zone
-    Value: !Ref PrivateSubnet1
-
-  # PrivateSubnet2:
-  #   Description: A reference to the private subnet in the 2nd Availability Zone
-  #   Value: !Ref PrivateSubnet2
-
-  NoIngressSecurityGroup:
-    Description: Security group with no ingress rule
-    Value: !Ref NoIngressSecurityGroup
-
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  # HelloWorldApi:
-  #   Description: API Gateway endpoint URL for Prod stage for Hello World function
-  #   Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  # HelloWorldFunction:
-  #   Description: Hello World Lambda Function ARN
-  #   Value: !GetAtt HelloWorldFunction.Arn
-  # HelloWorldFunctionIamRole:
-  #   Description: Implicit IAM Role created for Hello World function
-  #   Value: !GetAtt HelloWorldFunctionRole.Arn
