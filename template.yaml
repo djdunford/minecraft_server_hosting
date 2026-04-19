@@ -137,35 +137,44 @@ Resources:
       GroupDescription: "Security group with server ingress"
       VpcId: !Ref VPC
 
-  ServerAccessIngress:
+  SshAccessIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      CidrIp: "0.0.0.0/0"
-      Description: UDP Minecraft server access
-      FromPort: 19132
-      GroupId: !GetAtt ServerSecurityGroup.GroupId
-      IpProtocol: udp
-      ToPort: 19132
-
-  ServerAccessEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      CidrIp: !Ref VpcCIDR
-      Description: SSH access
-      ToPort: 22
+      CidrIp: "10.192.0.0/16"
+      Description: ssh inbound access from VPC only
       FromPort: 22
       GroupId: !GetAtt ServerSecurityGroup.GroupId
       IpProtocol: tcp
+      ToPort: 22
 
-  SystemsManagerEgress:
+  SshAccessEgress:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
-      CidrIp: 0.0.0.0/0
-      Description: SSH access
-      ToPort: 443
-      FromPort: 443
+      CidrIp: "10.192.0.0/16"
+      Description: ssh outbound access to VPC only
+      FromPort: 22
       GroupId: !GetAtt ServerSecurityGroup.GroupId
       IpProtocol: tcp
+      ToPort: 22
+
+  AllEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: "0.0.0.0/0"
+      Description: https outbound access
+      FromPort: 0
+      GroupId: !GetAtt ServerSecurityGroup.GroupId
+      IpProtocol: "-1"
+      ToPort: 65535
+
+  Ec2InstanceConnectEndpoint:
+    Type: AWS::EC2::InstanceConnectEndpoint
+    Properties:
+      ClientToken: "Ec2InstanceConnectEndpoint"
+      PreserveClientIp: false
+      SecurityGroupIds:
+        - !Ref ServerSecurityGroup
+      SubnetId: !Ref PublicSubnet1
 
   ServerBucketReadRole:
     Type: AWS::IAM::Role
@@ -180,8 +189,6 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Path: /
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Policies:
         - PolicyName: S3-read-only-access
           PolicyDocument:
