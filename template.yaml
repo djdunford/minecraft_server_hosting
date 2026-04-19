@@ -205,7 +205,7 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: "ami-0cec26c926d826bc5"  # Amazon Linux 2023
+      ImageId: "ami-09dbc7ce74870d573"  # Amazon Linux 2023
       IamInstanceProfile: !Ref InstanceProfile
       InstanceType: t3.xlarge
       SecurityGroupIds:
