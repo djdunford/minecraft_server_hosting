@@ -147,6 +147,38 @@ Resources:
       IpProtocol: tcp
       ToPort: 22
 
+  Satisfactory7777TcpAccessIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIp: "10.192.0.0/16"
+      Description: Satisfactory inbound access
+      FromPort: 7777
+      GroupId: !GetAtt ServerSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 7777
+
+
+  Satisfactory7777UdpAccessIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIp: "10.192.0.0/16"
+      Description: Satisfactory inbound access
+      FromPort: 7777
+      GroupId: !GetAtt ServerSecurityGroup.GroupId
+      IpProtocol: udp
+      ToPort: 7777
+
+
+  Satisfactory8888TcpAccessIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIp: "10.192.0.0/16"
+      Description: Satisfactory inbound access
+      FromPort: 8888
+      GroupId: !GetAtt ServerSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 8888
+
   SshAccessEgress:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
