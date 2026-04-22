@@ -4,7 +4,7 @@
 
 ```bash
 sudo add-apt-repository multiverse; sudo dpkg --add-architecture i386; sudo apt update
-sudo apt install steamcmd
+sudo apt install steamcmd -y
 steamcmd +force_install_dir ~/SatisfactoryDedicatedServer +login anonymous +app_update 1690800 validate +quit
 cd SatisfactoryDedicatedServer/
 ./FactoryServer.sh 
