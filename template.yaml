@@ -1,20 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  minecraft_server_control
-
-  Sample SAM Template for minecraft_server_control
-
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
-
-Globals:
-  Function:
-    Timeout: 3
-
-    Tracing: Active
-  Api:
-    TracingEnabled: true
-
+Description: Satisfactory Server and associated infra
 Parameters:
   EnvironmentName:
     Description: An environment name that is prefixed to resource names
@@ -58,21 +44,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-
-  ApplicationResourceGroup:
-    Type: AWS::ResourceGroups::Group
-    Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
-      ResourceQuery:
-        Type: CLOUDFORMATION_STACK_1_0
-
-  ApplicationInsightsMonitoring:
-    Type: AWS::ApplicationInsights::Application
-    Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
 
   VPC:
     Type: AWS::EC2::VPC
