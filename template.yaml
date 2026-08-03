@@ -173,7 +173,7 @@ Resources:
   Ec2InstanceConnectEndpoint:
     Type: AWS::EC2::InstanceConnectEndpoint
     Properties:
-      ClientToken: "Ec2InstanceConnectEndpoint"
+      ClientToken: !Sub "${AWS::StackName}_Ec2InstanceConnectEndpoint"
       PreserveClientIp: false
       SecurityGroupIds:
         - !Ref ServerSecurityGroup
@@ -210,15 +210,17 @@ Resources:
     Properties:
       ImageId: "ami-09dbc7ce74870d573"  # Amazon Linux 2023
       IamInstanceProfile: !Ref InstanceProfile
-      InstanceType: t3.xlarge
+      InstanceType: t3.2xlarge
       SecurityGroupIds:
         - !Ref ServerSecurityGroup
       SubnetId: !Ref PublicSubnet1
       BlockDeviceMappings:
-        -
-          DeviceName: /dev/xvda
+        - DeviceName: /dev/sda1
           Ebs:
             VolumeSize: 16
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 32
 
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
