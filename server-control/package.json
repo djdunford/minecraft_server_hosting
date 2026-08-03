@@ -1,10 +1,8 @@
 {
-  "name": "hello_world",
+  "name": "server_control",
   "version": "1.0.0",
-  "description": "hello world sample for NodeJS",
+  "description": "Satisfactory server control API (status/start/update-dns)",
   "main": "app.js",
-  "repository": "https://github.com/awslabs/aws-sam-cli/tree/develop/samcli/local/init/templates/cookiecutter-aws-sam-hello-nodejs",
-  "author": "SAM CLI",
   "license": "MIT",
   "scripts": {
     "unit": "jest",
@@ -13,6 +11,8 @@
     "test": "npm run compile && npm run unit"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "^3.600.0",
+    "@aws-sdk/client-route-53": "^3.600.0",
     "esbuild": "^0.14.14"
   },
   "devDependencies": {

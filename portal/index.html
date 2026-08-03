@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Satisfactory Server Control</title>
+<style>
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #14161a;
+        color: #e6e6e6;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .card {
+        background: #1e2126;
+        border: 1px solid #2c3038;
+        border-radius: 10px;
+        padding: 32px;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    h1 {
+        font-size: 20px;
+        margin: 0 0 24px;
+        color: #ff9d3d;
+    }
+    label {
+        display: block;
+        font-size: 13px;
+        color: #9aa0aa;
+        margin-bottom: 6px;
+    }
+    input {
+        width: 100%;
+        padding: 10px 12px;
+        margin-bottom: 16px;
+        background: #14161a;
+        border: 1px solid #2c3038;
+        border-radius: 6px;
+        color: #e6e6e6;
+        font-size: 14px;
+    }
+    input:focus { outline: none; border-color: #ff9d3d; }
+    button {
+        width: 100%;
+        padding: 11px;
+        border: none;
+        border-radius: 6px;
+        background: #ff9d3d;
+        color: #14161a;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        margin-top: 4px;
+    }
+    button:hover { background: #ffb15e; }
+    button:disabled { background: #4a4d54; color: #8a8d94; cursor: not-allowed; }
+    button.secondary {
+        background: transparent;
+        border: 1px solid #2c3038;
+        color: #e6e6e6;
+    }
+    button.secondary:hover { background: #2c3038; }
+    .error {
+        color: #ff5c5c;
+        font-size: 13px;
+        margin: -8px 0 16px;
+        min-height: 16px;
+    }
+    .status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 0;
+        border-bottom: 1px solid #2c3038;
+        margin-bottom: 16px;
+    }
+    .status-label { color: #9aa0aa; font-size: 13px; }
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .badge.running { background: #1f4a2e; color: #4ade80; }
+    .badge.stopped { background: #4a1f1f; color: #ff6b6b; }
+    .badge.pending, .badge.stopping, .badge.unknown { background: #4a3d1f; color: #fbbf24; }
+    .ip {
+        font-family: 'SF Mono', Consolas, monospace;
+        font-size: 14px;
+        color: #e6e6e6;
+    }
+    .actions button { margin-bottom: 10px; }
+    .hint {
+        font-size: 12px;
+        color: #9aa0aa;
+        margin-top: 16px;
+        line-height: 1.5;
+    }
+    .hidden { display: none !important; }
+    .signout { text-align: right; margin-bottom: 12px; }
+    .signout a { color: #9aa0aa; font-size: 12px; cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+<div id="app">
+
+    <div id="login-view" class="card">
+        <h1>Satisfactory Server Control</h1>
+        <form id="login-form">
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="username" required>
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" required>
+            <div class="error" id="login-error"></div>
+            <button type="submit" id="login-btn">Sign In</button>
+        </form>
+    </div>
+
+    <div id="new-password-view" class="card hidden">
+        <h1>Set New Password</h1>
+        <p class="hint">Your temporary password must be changed before continuing.</p>
+        <form id="new-password-form">
+            <label for="new-password">New Password</label>
+            <input id="new-password" type="password" autocomplete="new-password" required>
+            <div class="error" id="new-password-error"></div>
+            <button type="submit" id="new-password-btn">Set Password</button>
+        </form>
+    </div>
+
+    <div id="control-view" class="card hidden">
+        <div class="signout"><a id="signout-link">Sign out</a></div>
+        <h1>Satisfactory Server Control</h1>
+
+        <div class="status-row">
+            <span class="status-label">Status</span>
+            <span class="badge unknown" id="status-badge">Loading…</span>
+        </div>
+        <div class="status-row">
+            <span class="status-label">Public IP</span>
+            <span class="ip" id="status-ip">—</span>
+        </div>
+
+        <div class="actions">
+            <button id="start-btn" class="hidden">Start Server</button>
+            <button id="dns-btn" class="hidden">Point sat.fivearcher.co.uk Here</button>
+            <button id="refresh-btn" class="secondary">Refresh Status</button>
+        </div>
+
+        <div class="error" id="action-error"></div>
+        <div class="hint" id="action-hint"></div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6/dist/amazon-cognito-identity.min.js"></script>
+<script>
+(function () {
+    // --- Configuration: replace with stack output values after first deploy ---
+    const CONFIG = {
+        userPoolId: 'eu-west-2_DQEaQ0Ju3',
+        clientId: '7acrcg9jtgkhi3gh9p6gm5lv2l',
+        apiUrl: 'https://vljkkmxft0.execute-api.eu-west-2.amazonaws.com/prod',
+    };
+
+    const userPool = new AmazonCognitoIdentity.CognitoUserPool({
+        UserPoolId: CONFIG.userPoolId,
+        ClientId: CONFIG.clientId,
+    });
+
+    const loginView = document.getElementById('login-view');
+    const newPasswordView = document.getElementById('new-password-view');
+    const controlView = document.getElementById('control-view');
+
+    const loginForm = document.getElementById('login-form');
+    const loginError = document.getElementById('login-error');
+    const loginBtn = document.getElementById('login-btn');
+
+    const newPasswordForm = document.getElementById('new-password-form');
+    const newPasswordError = document.getElementById('new-password-error');
+    const newPasswordBtn = document.getElementById('new-password-btn');
+
+    const statusBadge = document.getElementById('status-badge');
+    const statusIp = document.getElementById('status-ip');
+    const startBtn = document.getElementById('start-btn');
+    const dnsBtn = document.getElementById('dns-btn');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const actionError = document.getElementById('action-error');
+    const actionHint = document.getElementById('action-hint');
+    const signoutLink = document.getElementById('signout-link');
+
+    let idToken = null;
+    let pollTimer = null;
+    let pollAttempts = 0;
+    const MAX_POLL_ATTEMPTS = 24;
+    const POLL_INTERVAL_MS = 5000;
+
+    let pendingCognitoUser = null;
+
+    function showView(view) {
+        [loginView, newPasswordView, controlView].forEach((v) => v.classList.add('hidden'));
+        view.classList.remove('hidden');
+    }
+
+    function setBadge(status) {
+        const known = ['running', 'stopped', 'pending', 'stopping'];
+        const cls = known.includes(status) ? status : 'unknown';
+        statusBadge.textContent = status;
+        statusBadge.className = 'badge ' + cls;
+    }
+
+    async function apiCall(method, path) {
+        const res = await fetch(CONFIG.apiUrl + path, {
+            method,
+            headers: {
+                Authorization: idToken,
+                'Content-Type': 'application/json',
+            },
+        });
+        if (res.status === 401) {
+            actionError.textContent = 'Session expired, please sign in again.';
+            signOut();
+            throw new Error('unauthorized');
+        }
+        const body = await res.json();
+        if (!res.ok) {
+            throw new Error(body.message || 'Request failed');
+        }
+        return body;
+    }
+
+    function stopPolling() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+        pollAttempts = 0;
+    }
+
+    async function refreshStatus() {
+        actionError.textContent = '';
+        try {
+            const { status, publicIp } = await apiCall('GET', '/status');
+            setBadge(status);
+            statusIp.textContent = publicIp || '—';
+            startBtn.classList.toggle('hidden', status !== 'stopped');
+            dnsBtn.classList.toggle('hidden', !(status === 'running' && publicIp));
+            return { status, publicIp };
+        } catch (err) {
+            actionError.textContent = err.message;
+            return null;
+        }
+    }
+
+    async function startServer() {
+        startBtn.disabled = true;
+        actionError.textContent = '';
+        actionHint.textContent = 'Starting server…';
+        try {
+            await apiCall('POST', '/start');
+            pollAttempts = 0;
+            pollTimer = setInterval(async () => {
+                pollAttempts += 1;
+                const result = await refreshStatus();
+                if (result && result.status === 'running' && result.publicIp) {
+                    stopPolling();
+                    actionHint.textContent = 'Server is running. Update DNS to connect.';
+                    startBtn.disabled = false;
+                } else if (pollAttempts >= MAX_POLL_ATTEMPTS) {
+                    stopPolling();
+                    actionHint.textContent = 'Server is taking longer than expected to start. Keep refreshing.';
+                    startBtn.disabled = false;
+                }
+            }, POLL_INTERVAL_MS);
+        } catch (err) {
+            actionError.textContent = err.message;
+            startBtn.disabled = false;
+            actionHint.textContent = '';
+        }
+    }
+
+    async function updateDns() {
+        dnsBtn.disabled = true;
+        actionError.textContent = '';
+        try {
+            const { ip, domain } = await apiCall('POST', '/update-dns');
+            actionHint.textContent = domain + ' now points to ' + ip + '.';
+        } catch (err) {
+            actionError.textContent = err.message;
+        } finally {
+            dnsBtn.disabled = false;
+        }
+    }
+
+    function signOut() {
+        stopPolling();
+        const current = userPool.getCurrentUser();
+        if (current) current.signOut();
+        idToken = null;
+        showView(loginView);
+    }
+
+    async function enterControlView() {
+        showView(controlView);
+        actionHint.textContent = '';
+        await refreshStatus();
+    }
+
+    loginForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        loginError.textContent = '';
+        loginBtn.disabled = true;
+
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        const cognitoUser = new AmazonCognitoIdentity.CognitoUser({ Username: email, Pool: userPool });
+        const authDetails = new AmazonCognitoIdentity.AuthenticationDetails({ Username: email, Password: password });
+
+        cognitoUser.authenticateUser(authDetails, {
+            onSuccess: function (result) {
+                idToken = result.getIdToken().getJwtToken();
+                loginBtn.disabled = false;
+                enterControlView();
+            },
+            onFailure: function (err) {
+                loginError.textContent = err.message || 'Sign in failed';
+                loginBtn.disabled = false;
+            },
+            newPasswordRequired: function () {
+                pendingCognitoUser = cognitoUser;
+                loginBtn.disabled = false;
+                showView(newPasswordView);
+            },
+        });
+    });
+
+    newPasswordForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        newPasswordError.textContent = '';
+        newPasswordBtn.disabled = true;
+
+        const newPassword = document.getElementById('new-password').value;
+
+        pendingCognitoUser.completeNewPasswordChallenge(newPassword, {}, {
+            onSuccess: function (result) {
+                idToken = result.getIdToken().getJwtToken();
+                newPasswordBtn.disabled = false;
+                enterControlView();
+            },
+            onFailure: function (err) {
+                newPasswordError.textContent = err.message || 'Could not set password';
+                newPasswordBtn.disabled = false;
+            },
+        });
+    });
+
+    startBtn.addEventListener('click', startServer);
+    dnsBtn.addEventListener('click', updateDns);
+    refreshBtn.addEventListener('click', refreshStatus);
+    signoutLink.addEventListener('click', signOut);
+
+    showView(loginView);
+})();
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@ resolve_s3 = true
 s3_prefix = "satisfactory-server-2"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "EnvironmentName=\"dev\" VpcCIDR=\"10.192.0.0/16\" PublicSubnet1CIDR=\"10.192.10.0/24\" PrivateSubnet1CIDR=\"10.192.20.0/24\""
+parameter_overrides = "EnvironmentName=\"dev\" VpcCIDR=\"10.192.0.0/16\" PublicSubnet1CIDR=\"10.192.10.0/24\" PrivateSubnet1CIDR=\"10.192.20.0/24\" PortalCertificateArn=\"arn:aws:acm:us-east-1:960969758193:certificate/e9773885-4ee2-48c1-b6e5-0bab65eb053f\""
 image_repositories = []
 
 [default.global.parameters]
