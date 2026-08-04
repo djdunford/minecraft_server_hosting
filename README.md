@@ -9,3 +9,9 @@ steamcmd +force_install_dir ~/SatisfactoryDedicatedServer +login anonymous +app_
 cd SatisfactoryDedicatedServer/
 ./FactoryServer.sh 
 ```
+
+```bash
+sudo apt -y update
+sudo apt -y upgrade
+
+```
