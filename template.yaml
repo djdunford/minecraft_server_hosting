@@ -205,22 +205,31 @@ Resources:
                   - !Sub "arn:aws:s3:::${Artefacts}"
                   - !Sub "arn:aws:s3:::${Artefacts}/*"
 
-  EC2Instance:
-    Type: AWS::EC2::Instance
+#  EC2Instance:
+#    Type: AWS::EC2::Instance
+#    Properties:
+#      ImageId: "ami-0b3d31542fbd18af6"
+#      IamInstanceProfile: !Ref InstanceProfile
+#      InstanceType: t3.2xlarge
+#      LaunchTemplate: !Ref EC2InstanceLaunchTemplate
+#      SecurityGroupIds:
+#        - !Ref ServerSecurityGroup
+#      SubnetId: !Ref PublicSubnet1
+
+  EC2InstanceLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      ImageId: "ami-09dbc7ce74870d573"  # Amazon Linux 2023
-      IamInstanceProfile: !Ref InstanceProfile
-      InstanceType: t3.2xlarge
-      SecurityGroupIds:
-        - !Ref ServerSecurityGroup
-      SubnetId: !Ref PublicSubnet1
-      BlockDeviceMappings:
-        - DeviceName: /dev/sda1
-          Ebs:
-            VolumeSize: 16
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 32
+      LaunchTemplateData:
+        InstanceMarketOptions:
+          MarketType: spot
+          SpotOptions:
+            SpotInstanceType: persistent
+            InstanceInterruptionBehavior: stop
+#        BlockDeviceMappings:
+#          - DeviceName: /dev/sda1
+#            Ebs:
+#              VolumeSize: 24
+      LaunchTemplateName: !Sub "${AWS::StackName}-ec2-launch-template"
 
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
