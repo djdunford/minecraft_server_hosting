@@ -205,16 +205,18 @@ Resources:
                   - !Sub "arn:aws:s3:::${Artefacts}"
                   - !Sub "arn:aws:s3:::${Artefacts}/*"
 
-#  EC2Instance:
-#    Type: AWS::EC2::Instance
-#    Properties:
-#      ImageId: "ami-0b3d31542fbd18af6"
-#      IamInstanceProfile: !Ref InstanceProfile
-#      InstanceType: t3.2xlarge
-#      LaunchTemplate: !Ref EC2InstanceLaunchTemplate
-#      SecurityGroupIds:
-#        - !Ref ServerSecurityGroup
-#      SubnetId: !Ref PublicSubnet1
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "ami-092121f980037d0e6"
+      IamInstanceProfile: !Ref InstanceProfile
+      InstanceType: t3.2xlarge
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2InstanceLaunchTemplate
+        Version: !GetAtt EC2InstanceLaunchTemplate.LatestVersionNumber
+      SecurityGroupIds:
+        - !Ref ServerSecurityGroup
+      SubnetId: !Ref PublicSubnet1
 
   EC2InstanceLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -225,10 +227,10 @@ Resources:
           SpotOptions:
             SpotInstanceType: persistent
             InstanceInterruptionBehavior: stop
-#        BlockDeviceMappings:
-#          - DeviceName: /dev/sda1
-#            Ebs:
-#              VolumeSize: 24
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 24
       LaunchTemplateName: !Sub "${AWS::StackName}-ec2-launch-template"
 
   InstanceProfile:
