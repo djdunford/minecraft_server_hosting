@@ -1,11 +1,12 @@
 {
-  "name": "hello_world",
+  "name": "server_control",
   "version": "1.0.0",
-  "description": "hello world sample for NodeJS",
+  "description": "Satisfactory server control API (status/start/update-dns)",
   "main": "app.js",
-  "repository": "https://github.com/awslabs/aws-sam-cli/tree/develop/samcli/local/init/templates/cookiecutter-aws-sam-hello-nodejs",
-  "author": "SAM CLI",
   "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "unit": "jest",
     "lint": "eslint '*.ts' --quiet --fix",
@@ -13,12 +14,14 @@
     "test": "npm run compile && npm run unit"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "^3.600.0",
+    "@aws-sdk/client-route-53": "^3.600.0",
     "esbuild": "^0.14.14"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.92",
     "@types/jest": "^29.2.0",
-    "@types/node": "^18.11.4",
+    "@types/node": "^24.0.0",
     "@typescript-eslint/eslint-plugin": "^5.10.2",
     "@typescript-eslint/parser": "^5.10.2",
     "eslint": "^8.8.0",
