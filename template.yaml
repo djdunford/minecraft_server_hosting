@@ -218,7 +218,7 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: "ami-092121f980037d0e6"
+      ImageId: "ami-09bca829c9a84545f"
       IamInstanceProfile: !Ref InstanceProfile
       InstanceType: t3.2xlarge
       LaunchTemplate:
