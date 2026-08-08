@@ -202,6 +202,9 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
         - PolicyName: S3-read-only-access
           PolicyDocument:
@@ -218,19 +221,30 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: "ami-09dbc7ce74870d573"  # Amazon Linux 2023
+      ImageId: "ami-0f55dde1c8d03cbf3"
       IamInstanceProfile: !Ref InstanceProfile
       InstanceType: t3.2xlarge
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2InstanceLaunchTemplate
+        Version: !GetAtt EC2InstanceLaunchTemplate.LatestVersionNumber
       SecurityGroupIds:
         - !Ref ServerSecurityGroup
       SubnetId: !Ref PublicSubnet1
-      BlockDeviceMappings:
-        - DeviceName: /dev/sda1
-          Ebs:
-            VolumeSize: 16
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 32
+
+  EC2InstanceLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        InstanceMarketOptions:
+          MarketType: spot
+          SpotOptions:
+            SpotInstanceType: persistent
+            InstanceInterruptionBehavior: stop
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 24
+      LaunchTemplateName: !Sub "${AWS::StackName}-ec2-launch-template"
 
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
