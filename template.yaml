@@ -416,6 +416,8 @@ Resources:
         - x86_64
       Timeout: 30
       MemorySize: 256
+      LoggingConfig:
+        LogFormat: JSON
       Environment:
         Variables:
           INSTANCE_ID: !Ref EC2Instance
@@ -433,6 +435,7 @@ Resources:
             - Effect: Allow
               Action:
                 - ec2:StartInstances
+                - ec2:StopInstances
               Resource: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${EC2Instance}"
             - Effect: Allow
               Action:
@@ -451,6 +454,12 @@ Resources:
             ApiId: !Ref ServerControlApi
             Path: /start
             Method: POST
+        StopServer:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ServerControlApi
+            Path: /stop
+            Method: POST
         UpdateDns:
           Type: HttpApi
           Properties:
@@ -465,6 +474,56 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - app.ts
+
+  ServerImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: server-control/
+      Handler: image.handler
+      Runtime: nodejs24.x
+      Architectures:
+        - x86_64
+      Timeout: 60
+      MemorySize: 256
+      LoggingConfig:
+        LogFormat: JSON
+      Environment:
+        Variables:
+          INSTANCE_ID: !Ref EC2Instance
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - ec2:CreateImage
+                - ec2:CreateTags
+              Resource:
+                - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${EC2Instance}"
+                - !Sub "arn:aws:ec2:${AWS::Region}::image/*"
+                - !Sub "arn:aws:ec2:${AWS::Region}::snapshot/*"
+                - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:volume/*"
+      Events:
+        InstanceStopped:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.ec2
+              detail-type:
+                - "EC2 Instance State-change Notification"
+              detail:
+                state:
+                  - stopped
+                instance-id:
+                  - !Ref EC2Instance
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+          - image.ts
 
 Outputs:
   VPC:

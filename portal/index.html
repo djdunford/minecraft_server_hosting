@@ -151,6 +151,7 @@
 
         <div class="actions">
             <button id="start-btn" class="hidden">Start Server</button>
+            <button id="stop-btn" class="hidden">Stop Server</button>
             <button id="dns-btn" class="hidden">Point sat.fivearcher.co.uk Here</button>
             <button id="refresh-btn" class="secondary">Refresh Status</button>
         </div>
@@ -191,6 +192,7 @@
     const statusBadge = document.getElementById('status-badge');
     const statusIp = document.getElementById('status-ip');
     const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
     const dnsBtn = document.getElementById('dns-btn');
     const refreshBtn = document.getElementById('refresh-btn');
     const actionError = document.getElementById('action-error');
@@ -252,6 +254,7 @@
             setBadge(status);
             statusIp.textContent = publicIp || '—';
             startBtn.classList.toggle('hidden', status !== 'stopped');
+            stopBtn.classList.toggle('hidden', status !== 'running');
             dnsBtn.classList.toggle('hidden', !(status === 'running' && publicIp));
             return { status, publicIp };
         } catch (err) {
@@ -283,6 +286,36 @@
         } catch (err) {
             actionError.textContent = err.message;
             startBtn.disabled = false;
+            actionHint.textContent = '';
+        }
+    }
+
+    async function stopServer() {
+        if (!confirm('Stop the server? Any connected players will be disconnected.')) {
+            return;
+        }
+        stopBtn.disabled = true;
+        actionError.textContent = '';
+        actionHint.textContent = 'Stopping server…';
+        try {
+            await apiCall('POST', '/stop');
+            pollAttempts = 0;
+            pollTimer = setInterval(async () => {
+                pollAttempts += 1;
+                const result = await refreshStatus();
+                if (result && result.status === 'stopped') {
+                    stopPolling();
+                    actionHint.textContent = 'Server stopped. A backup image is being created automatically.';
+                    stopBtn.disabled = false;
+                } else if (pollAttempts >= MAX_POLL_ATTEMPTS) {
+                    stopPolling();
+                    actionHint.textContent = 'Server is taking longer than expected to stop. Keep refreshing.';
+                    stopBtn.disabled = false;
+                }
+            }, POLL_INTERVAL_MS);
+        } catch (err) {
+            actionError.textContent = err.message;
+            stopBtn.disabled = false;
             actionHint.textContent = '';
         }
     }
@@ -364,6 +397,7 @@
     });
 
     startBtn.addEventListener('click', startServer);
+    stopBtn.addEventListener('click', stopServer);
     dnsBtn.addEventListener('click', updateDns);
     refreshBtn.addEventListener('click', refreshStatus);
     signoutLink.addEventListener('click', signOut);

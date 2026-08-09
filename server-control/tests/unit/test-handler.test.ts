@@ -10,6 +10,7 @@ jest.mock('@aws-sdk/client-ec2', () => ({
     EC2Client: jest.fn().mockImplementation(() => ({ send: ec2Send })),
     DescribeInstancesCommand: jest.fn().mockImplementation((input) => ({ input })),
     StartInstancesCommand: jest.fn().mockImplementation((input) => ({ input })),
+    StopInstancesCommand: jest.fn().mockImplementation((input) => ({ input })),
 }));
 
 jest.mock('@aws-sdk/client-route-53', () => ({
@@ -76,6 +77,24 @@ describe('server-control handler', () => {
             previousState: 'stopped',
             currentState: 'pending',
         });
+    });
+
+    it('POST /stop initiates instance stop', async () => {
+        ec2Send.mockResolvedValueOnce({
+            StoppingInstances: [{ PreviousState: { Name: 'running' }, CurrentState: { Name: 'stopping' } }],
+        });
+
+        const result = await handler(baseEvent('POST /stop'));
+
+        expect(result.statusCode).toEqual(200);
+        expect(JSON.parse(result.body)).toEqual({
+            message: 'Instance stop initiated',
+            previousState: 'running',
+            currentState: 'stopping',
+        });
+        expect(ec2Send).toHaveBeenCalledTimes(1);
+        const command = ec2Send.mock.calls[0][0] as { input: { InstanceIds: string[] } };
+        expect(command.input).toEqual({ InstanceIds: ['i-0123456789abcdef0'] });
     });
 
     it('POST /update-dns upserts the A record when instance has a public IP', async () => {

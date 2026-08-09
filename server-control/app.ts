@@ -1,6 +1,7 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { DescribeInstancesCommand, EC2Client, StartInstancesCommand } from '@aws-sdk/client-ec2';
+import { DescribeInstancesCommand, EC2Client, StartInstancesCommand, StopInstancesCommand } from '@aws-sdk/client-ec2';
 import { ChangeResourceRecordSetsCommand, Route53Client } from '@aws-sdk/client-route-53';
+import { logError, logInfo, logWarn } from './logger';
 
 const ec2 = new EC2Client({});
 const route53 = new Route53Client({});
@@ -31,22 +32,40 @@ const describeInstance = async () => {
 
 const getStatus = async (): Promise<APIGatewayProxyResultV2> => {
     const { status, publicIp } = await describeInstance();
+    logInfo('Instance status retrieved', { status, publicIp });
     return response(200, { status, publicIp });
 };
 
 const startServer = async (): Promise<APIGatewayProxyResultV2> => {
     const result = await ec2.send(new StartInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
     const stateChange = result.StartingInstances?.[0];
+    const previousState = stateChange?.PreviousState?.Name ?? 'unknown';
+    const currentState = stateChange?.CurrentState?.Name ?? 'unknown';
+    logInfo('Instance start initiated', { instanceId: INSTANCE_ID, previousState, currentState });
     return response(200, {
         message: 'Instance start initiated',
-        previousState: stateChange?.PreviousState?.Name ?? 'unknown',
-        currentState: stateChange?.CurrentState?.Name ?? 'unknown',
+        previousState,
+        currentState,
+    });
+};
+
+const stopServer = async (): Promise<APIGatewayProxyResultV2> => {
+    const result = await ec2.send(new StopInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
+    const stateChange = result.StoppingInstances?.[0];
+    const previousState = stateChange?.PreviousState?.Name ?? 'unknown';
+    const currentState = stateChange?.CurrentState?.Name ?? 'unknown';
+    logInfo('Instance stop initiated', { instanceId: INSTANCE_ID, previousState, currentState });
+    return response(200, {
+        message: 'Instance stop initiated',
+        previousState,
+        currentState,
     });
 };
 
 const updateDns = async (): Promise<APIGatewayProxyResultV2> => {
     const { publicIp } = await describeInstance();
     if (!publicIp) {
+        logWarn('DNS update skipped: instance has no public IP', { instanceId: INSTANCE_ID });
         return response(400, { message: 'Instance has no public IP. Is it running?' });
     }
 
@@ -69,6 +88,7 @@ const updateDns = async (): Promise<APIGatewayProxyResultV2> => {
         }),
     );
 
+    logInfo('DNS updated', { domain: DOMAIN_NAME, ip: publicIp, ttl: DNS_TTL });
     return response(200, { message: 'DNS updated', ip: publicIp, domain: DOMAIN_NAME });
 };
 
@@ -79,13 +99,19 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
                 return await getStatus();
             case 'POST /start':
                 return await startServer();
+            case 'POST /stop':
+                return await stopServer();
             case 'POST /update-dns':
                 return await updateDns();
             default:
+                logWarn('Route not found', { routeKey: event.routeKey });
                 return response(404, { message: 'Not found' });
         }
     } catch (err) {
-        console.log(err);
+        logError('Unhandled error processing request', {
+            routeKey: event.routeKey,
+            error: err instanceof Error ? err.message : String(err),
+        });
         return response(500, { message: 'Internal server error' });
     }
 };
