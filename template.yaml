@@ -12,11 +12,6 @@ Parameters:
     Type: String
     Default: 10.192.10.0/24
 
-  PrivateSubnet1CIDR:
-    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
-    Type: String
-    Default: 10.192.20.0/24
-
   PortalCertificateArn:
     Description: ARN of the ACM certificate for portal.fivearcher.co.uk (must be issued in us-east-1 for CloudFront)
     Type: String
