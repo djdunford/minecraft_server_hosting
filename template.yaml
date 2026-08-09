@@ -31,6 +31,11 @@ Parameters:
     Type: String
     Default: sat.fivearcher.co.uk
 
+  DnsTtl:
+    Description: DNS entry TTL value
+    Type: String
+    Default: "5"
+
 Resources:
   Artefacts:
     Type: AWS::S3::Bucket
@@ -417,6 +422,7 @@ Resources:
           HOSTED_ZONE_ID: !Ref HostedZoneId
           DOMAIN_NAME: !Ref ServerDomainName
           ALLOWED_ORIGIN: !Sub "https://${PortalDomainName}"
+          DNS_TTL: !Ref DnsTtl
       Policies:
         - Version: "2012-10-17"
           Statement:

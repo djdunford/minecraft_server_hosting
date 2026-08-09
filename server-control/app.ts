@@ -9,6 +9,7 @@ const INSTANCE_ID = process.env.INSTANCE_ID!;
 const HOSTED_ZONE_ID = process.env.HOSTED_ZONE_ID!;
 const DOMAIN_NAME = process.env.DOMAIN_NAME!;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? '*';
+const DNS_TTL = parseInt(process.env.DNS_TTL ?? "300");
 
 const response = (statusCode: number, body: Record<string, unknown>): APIGatewayProxyResultV2 => ({
     statusCode,
@@ -59,7 +60,7 @@ const updateDns = async (): Promise<APIGatewayProxyResultV2> => {
                         ResourceRecordSet: {
                             Name: DOMAIN_NAME,
                             Type: 'A',
-                            TTL: 300,
+                            TTL: DNS_TTL,
                             ResourceRecords: [{ Value: publicIp }],
                         },
                     },

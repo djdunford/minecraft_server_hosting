@@ -93,6 +93,30 @@ describe('server-control handler', () => {
             domain: 'sat.fivearcher.co.uk',
         });
         expect(route53Send).toHaveBeenCalledTimes(1);
+        const command = route53Send.mock.calls[0][0] as { input: { ChangeBatch: { Changes: { ResourceRecordSet: { TTL: number } }[] } } };
+        expect(command.input.ChangeBatch.Changes[0].ResourceRecordSet.TTL).toEqual(300);
+    });
+
+    it('POST /update-dns uses DNS_TTL env var when set', async () => {
+        let isolatedHandler!: typeof handler;
+        await jest.isolateModulesAsync(async () => {
+            process.env.DNS_TTL = '5';
+            isolatedHandler = require('../../app').handler;
+        });
+
+        try {
+            ec2Send.mockResolvedValueOnce({
+                Reservations: [{ Instances: [{ State: { Name: 'running' }, PublicIpAddress: '5.6.7.8' }] }],
+            });
+            route53Send.mockResolvedValueOnce({});
+
+            await isolatedHandler(baseEvent('POST /update-dns'));
+
+            const command = route53Send.mock.calls[0][0] as { input: { ChangeBatch: { Changes: { ResourceRecordSet: { TTL: number } }[] } } };
+            expect(command.input.ChangeBatch.Changes[0].ResourceRecordSet.TTL).toEqual(5);
+        } finally {
+            delete process.env.DNS_TTL;
+        }
     });
 
     it('POST /update-dns returns 400 when instance has no public IP', async () => {
