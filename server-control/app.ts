@@ -1,4 +1,4 @@
-import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { DescribeInstancesCommand, EC2Client, StartInstancesCommand, StopInstancesCommand } from '@aws-sdk/client-ec2';
 import { ChangeResourceRecordSetsCommand, Route53Client } from '@aws-sdk/client-route-53';
 import { logError, logInfo, logWarn } from './logger';
@@ -21,6 +21,19 @@ const response = (statusCode: number, body: Record<string, unknown>): APIGateway
     body: JSON.stringify(body),
 });
 
+type CognitoUser = {
+    sub?: string;
+    email?: string;
+};
+
+const getCognitoUser = (event: APIGatewayProxyEventV2WithJWTAuthorizer): CognitoUser => {
+    const claims = event.requestContext.authorizer?.jwt?.claims ?? {};
+    return {
+        sub: typeof claims.sub === 'string' ? claims.sub : undefined,
+        email: typeof claims.email === 'string' ? claims.email : undefined,
+    };
+};
+
 const describeInstance = async () => {
     const result = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
     const instance = result.Reservations?.[0]?.Instances?.[0];
@@ -30,18 +43,18 @@ const describeInstance = async () => {
     };
 };
 
-const getStatus = async (): Promise<APIGatewayProxyResultV2> => {
+const getStatus = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> => {
     const { status, publicIp } = await describeInstance();
-    logInfo('Instance status retrieved', { status, publicIp });
+    logInfo('Instance status retrieved', { status, publicIp, user });
     return response(200, { status, publicIp });
 };
 
-const startServer = async (): Promise<APIGatewayProxyResultV2> => {
+const startServer = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> => {
     const result = await ec2.send(new StartInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
     const stateChange = result.StartingInstances?.[0];
     const previousState = stateChange?.PreviousState?.Name ?? 'unknown';
     const currentState = stateChange?.CurrentState?.Name ?? 'unknown';
-    logInfo('Instance start initiated', { instanceId: INSTANCE_ID, previousState, currentState });
+    logInfo('Instance start initiated', { instanceId: INSTANCE_ID, previousState, currentState, user });
     return response(200, {
         message: 'Instance start initiated',
         previousState,
@@ -49,12 +62,12 @@ const startServer = async (): Promise<APIGatewayProxyResultV2> => {
     });
 };
 
-const stopServer = async (): Promise<APIGatewayProxyResultV2> => {
+const stopServer = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> => {
     const result = await ec2.send(new StopInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
     const stateChange = result.StoppingInstances?.[0];
     const previousState = stateChange?.PreviousState?.Name ?? 'unknown';
     const currentState = stateChange?.CurrentState?.Name ?? 'unknown';
-    logInfo('Instance stop initiated', { instanceId: INSTANCE_ID, previousState, currentState });
+    logInfo('Instance stop initiated', { instanceId: INSTANCE_ID, previousState, currentState, user });
     return response(200, {
         message: 'Instance stop initiated',
         previousState,
@@ -62,10 +75,10 @@ const stopServer = async (): Promise<APIGatewayProxyResultV2> => {
     });
 };
 
-const updateDns = async (): Promise<APIGatewayProxyResultV2> => {
+const updateDns = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> => {
     const { publicIp } = await describeInstance();
     if (!publicIp) {
-        logWarn('DNS update skipped: instance has no public IP', { instanceId: INSTANCE_ID });
+        logWarn('DNS update skipped: instance has no public IP', { instanceId: INSTANCE_ID, user });
         return response(400, { message: 'Instance has no public IP. Is it running?' });
     }
 
@@ -88,29 +101,31 @@ const updateDns = async (): Promise<APIGatewayProxyResultV2> => {
         }),
     );
 
-    logInfo('DNS updated', { domain: DOMAIN_NAME, ip: publicIp, ttl: DNS_TTL });
+    logInfo('DNS updated', { domain: DOMAIN_NAME, ip: publicIp, ttl: DNS_TTL, user });
     return response(200, { message: 'DNS updated', ip: publicIp, domain: DOMAIN_NAME });
 };
 
-export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+export const handler = async (event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyResultV2> => {
+    const user = getCognitoUser(event);
     try {
         switch (event.routeKey) {
             case 'GET /status':
-                return await getStatus();
+                return await getStatus(user);
             case 'POST /start':
-                return await startServer();
+                return await startServer(user);
             case 'POST /stop':
-                return await stopServer();
+                return await stopServer(user);
             case 'POST /update-dns':
-                return await updateDns();
+                return await updateDns(user);
             default:
-                logWarn('Route not found', { routeKey: event.routeKey });
+                logWarn('Route not found', { routeKey: event.routeKey, user });
                 return response(404, { message: 'Not found' });
         }
     } catch (err) {
         logError('Unhandled error processing request', {
             routeKey: event.routeKey,
             error: err instanceof Error ? err.message : String(err),
+            user,
         });
         return response(500, { message: 'Internal server error' });
     }

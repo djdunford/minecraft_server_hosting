@@ -1,4 +1,4 @@
-import { APIGatewayProxyEventV2 } from 'aws-lambda';
+import { APIGatewayProxyEventV2WithJWTAuthorizer } from 'aws-lambda';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,16 +25,23 @@ process.env.DOMAIN_NAME = 'sat.fivearcher.co.uk';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { handler } = require('../../app');
 
-const baseEvent = (routeKey: string): APIGatewayProxyEventV2 =>
+const baseEvent = (routeKey: string): APIGatewayProxyEventV2WithJWTAuthorizer =>
     ({
         version: '2.0',
         routeKey,
         rawPath: '/',
         rawQueryString: '',
         headers: {},
-        requestContext: {} as never,
+        requestContext: {
+            authorizer: {
+                jwt: {
+                    claims: { sub: 'a1b2c3d4-0000-0000-0000-000000000000', email: 'player@example.com' },
+                    scopes: [],
+                },
+            },
+        } as never,
         isBase64Encoded: false,
-    } as APIGatewayProxyEventV2);
+    } as APIGatewayProxyEventV2WithJWTAuthorizer);
 
 describe('server-control handler', () => {
     beforeEach(() => {
@@ -161,5 +168,28 @@ describe('server-control handler', () => {
         const result = await handler(baseEvent('GET /status'));
 
         expect(result.statusCode).toEqual(500);
+    });
+
+    it('includes the Cognito user under $.message.user in structured log output', async () => {
+        // The Lambda runtime's JSON log formatter nests a logged object under a top-level
+        // "message" key, so the object logInfo/logError receive here is what ends up at $.message.
+        const expectedUser = { sub: 'a1b2c3d4-0000-0000-0000-000000000000', email: 'player@example.com' };
+        const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        try {
+            ec2Send.mockResolvedValueOnce({
+                Reservations: [{ Instances: [{ State: { Name: 'running' }, PublicIpAddress: '1.2.3.4' }] }],
+            });
+            await handler(baseEvent('GET /status'));
+            expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ user: expectedUser }));
+
+            ec2Send.mockRejectedValueOnce(new Error('boom'));
+            await handler(baseEvent('GET /status'));
+            expect(errorSpy).toHaveBeenCalledWith(expect.objectContaining({ user: expectedUser }));
+        } finally {
+            logSpy.mockRestore();
+            errorSpy.mockRestore();
+        }
     });
 });
