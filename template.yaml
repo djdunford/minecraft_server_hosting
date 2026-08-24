@@ -425,6 +425,8 @@ Resources:
           DOMAIN_NAME: !Ref ServerDomainName
           ALLOWED_ORIGIN: !Sub "https://${PortalDomainName}"
           DNS_TTL: !Ref DnsTtl
+          SATISFACTORY_API_PORT: "7777"
+          SATISFACTORY_API_TOKEN_PARAM: !Sub "/${AWS::StackName}/satisfactory/api-token"
       Policies:
         - Version: "2012-10-17"
           Statement:
@@ -441,6 +443,10 @@ Resources:
               Action:
                 - route53:ChangeResourceRecordSets
               Resource: !Sub "arn:aws:route53:::hostedzone/${HostedZoneId}"
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/satisfactory/api-token"
       Events:
         GetStatus:
           Type: HttpApi

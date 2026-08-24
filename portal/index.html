@@ -148,6 +148,10 @@
             <span class="status-label">Public IP</span>
             <span class="ip" id="status-ip">—</span>
         </div>
+        <div class="status-row">
+            <span class="status-label">Players Online</span>
+            <span class="ip" id="status-players">—</span>
+        </div>
 
         <div class="actions">
             <button id="start-btn" class="hidden">Start Server</button>
@@ -191,6 +195,7 @@
 
     const statusBadge = document.getElementById('status-badge');
     const statusIp = document.getElementById('status-ip');
+    const statusPlayers = document.getElementById('status-players');
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
     const dnsBtn = document.getElementById('dns-btn');
@@ -250,9 +255,13 @@
     async function refreshStatus() {
         actionError.textContent = '';
         try {
-            const { status, publicIp } = await apiCall('GET', '/status');
+            const { status, publicIp, onlinePlayers, playerLimit } = await apiCall('GET', '/status');
             setBadge(status);
             statusIp.textContent = publicIp || '—';
+            statusPlayers.textContent =
+                typeof onlinePlayers === 'number' && typeof playerLimit === 'number'
+                    ? onlinePlayers + ' / ' + playerLimit
+                    : '—';
             startBtn.classList.toggle('hidden', status !== 'stopped');
             stopBtn.classList.toggle('hidden', status !== 'running');
             dnsBtn.classList.toggle('hidden', !(status === 'running' && publicIp));

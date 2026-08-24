@@ -1,16 +1,22 @@
 import { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { DescribeInstancesCommand, EC2Client, StartInstancesCommand, StopInstancesCommand } from '@aws-sdk/client-ec2';
+import { EC2Client, StartInstancesCommand, StopInstancesCommand } from '@aws-sdk/client-ec2';
 import { ChangeResourceRecordSetsCommand, Route53Client } from '@aws-sdk/client-route-53';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { logError, logInfo, logWarn } from './logger';
+import { describeInstance } from './ec2';
+import { queryServerState } from './satisfactory-api';
 
 const ec2 = new EC2Client({});
 const route53 = new Route53Client({});
+const ssm = new SSMClient({});
 
 const INSTANCE_ID = process.env.INSTANCE_ID!;
 const HOSTED_ZONE_ID = process.env.HOSTED_ZONE_ID!;
 const DOMAIN_NAME = process.env.DOMAIN_NAME!;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? '*';
-const DNS_TTL = parseInt(process.env.DNS_TTL ?? "300");
+const DNS_TTL = parseInt(process.env.DNS_TTL ?? '300');
+const SATISFACTORY_API_PORT = process.env.SATISFACTORY_API_PORT ?? '7777';
+const SATISFACTORY_API_TOKEN_PARAM = process.env.SATISFACTORY_API_TOKEN_PARAM!;
 
 const response = (statusCode: number, body: Record<string, unknown>): APIGatewayProxyResultV2 => ({
     statusCode,
@@ -34,19 +40,41 @@ const getCognitoUser = (event: APIGatewayProxyEventV2WithJWTAuthorizer): Cognito
     };
 };
 
-const describeInstance = async () => {
-    const result = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
-    const instance = result.Reservations?.[0]?.Instances?.[0];
-    return {
-        status: instance?.State?.Name ?? 'unknown',
-        publicIp: instance?.PublicIpAddress ?? null,
-    };
+const getApiToken = async (): Promise<string | undefined> => {
+    try {
+        const result = await ssm.send(
+            new GetParameterCommand({ Name: SATISFACTORY_API_TOKEN_PARAM, WithDecryption: true }),
+        );
+        return result.Parameter?.Value;
+    } catch (err) {
+        logWarn('Failed to fetch Satisfactory API token from Parameter Store', {
+            parameter: SATISFACTORY_API_TOKEN_PARAM,
+            error: err instanceof Error ? err.message : String(err),
+        });
+        return undefined;
+    }
 };
 
 const getStatus = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> => {
     const { status, publicIp } = await describeInstance();
-    logInfo('Instance status retrieved', { status, publicIp, user });
-    return response(200, { status, publicIp });
+
+    let onlinePlayers: number | null = null;
+    let playerLimit: number | null = null;
+    if (status === 'running' && publicIp) {
+        try {
+            const token = await getApiToken();
+            ({ onlinePlayers, playerLimit } = await queryServerState(publicIp, SATISFACTORY_API_PORT, token));
+        } catch (err) {
+            logWarn('Failed to query game server state', {
+                publicIp,
+                error: err instanceof Error ? err.message : String(err),
+                user,
+            });
+        }
+    }
+
+    logInfo('Instance status retrieved', { status, publicIp, onlinePlayers, playerLimit, user });
+    return response(200, { status, publicIp, onlinePlayers, playerLimit });
 };
 
 const startServer = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> => {
