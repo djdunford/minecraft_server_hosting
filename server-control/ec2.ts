@@ -4,6 +4,7 @@ const ec2 = new EC2Client({});
 
 const INSTANCE_ID = process.env.INSTANCE_ID!;
 
+/** Looks up the EC2 instance state and public IP for `INSTANCE_ID`. */
 export const describeInstance = async () => {
     const result = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
     const instance = result.Reservations?.[0]?.Instances?.[0];

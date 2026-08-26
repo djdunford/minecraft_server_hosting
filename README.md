@@ -9,12 +9,11 @@ Deployed via AWS SAM (`template.yaml`) into a single CloudFormation stack:
 - **EC2 instance** — a persistent spot instance (`t3.2xlarge`) running the Satisfactory dedicated server, in its own VPC/public subnet. Spot interruptions stop rather than terminate the instance.
 - **Admin portal** — a static site (`portal/index.html`) served from S3 via CloudFront, protected by Cognito sign-in.
 - **Server control API** — an HTTP API (API Gateway) backed by a Lambda (`server-control/app.ts`) that exposes:
-  - `GET /status` — current instance state and public IP
+  - `GET /status` — current instance state, public IP, and (when running) the number of online players and player limit, queried live from the Satisfactory Dedicated Server's [HTTPS API](https://satisfactory.wiki.gg/wiki/Dedicated_servers/HTTPS_API) (`QueryServerState`)
   - `POST /start` — start the instance
   - `POST /stop` — stop the instance
   - `POST /update-dns` — upsert a Route 53 `A` record for the server's domain to the instance's current public IP
 - **Automatic backups** — a second Lambda (`server-control/image.ts`) is triggered by EventBridge whenever the instance transitions to `stopped` (including spot interruptions) and creates an AMI named `Satisfactory-<YYYYMMDDHHMM>`, tagged the same way, as a point-in-time backup of the server's save data.
-- **Automatic shutdown** — a third Lambda (`server-control/autostop.ts`) is invoked on two EventBridge schedules to keep the server from being left running unnecessarily: every 15 minutes it stops the instance if it has been running longer than `MaxUptimeHours`, and every night at 23:00 Europe/London it stops the instance unconditionally. Both trigger the same `stopped`-state backup above, so a shutdown of either kind still leaves an AMI behind.
 - **DNS** — a Route 53 hosted zone provides both the portal's domain (aliased to CloudFront) and the server's domain (updated on demand via the API).
 
 Every API request is authenticated via Cognito, and the authenticated user's `sub`/`email` are attached to structured JSON logs emitted by both Lambdas for auditing.
@@ -45,7 +44,6 @@ Key parameters (see `Parameters` in `template.yaml`):
 | `HostedZoneId` | Route 53 hosted zone ID | `Z05196342OPHB8ROH3JXW` |
 | `ServerDomainName` | Domain pointing at the server's public IP | `sat.fivearcher.co.uk` |
 | `DnsTtl` | TTL (seconds) for the server DNS record | `5` |
-| `MaxUptimeHours` | Maximum hours the server may run before automatic shutdown | `5` |
 
 A `samconfig.toml` is included with defaults for repeat deploys (`sam deploy` without `--guided`).
 
@@ -61,6 +59,7 @@ Sign in at `PortalUrl` with a Cognito user's credentials (first login requires s
 
 - Start the server and wait for it to report a public IP
 - Point `ServerDomainName` at that IP
+- See the number of players currently online once the server is running (see [Configuring the Satisfactory API token](#configuring-the-satisfactory-api-token-for-online-player-count) if this is required by your server)
 - Stop the server — a backup AMI is created automatically once it reaches the `stopped` state
 
 ## Server-control Lambda development
@@ -92,6 +91,28 @@ Keep the instance's packages up to date:
 sudo apt -y update
 sudo apt -y upgrade
 ```
+
+## Configuring the Satisfactory API token (for online player count)
+
+The `/status` endpoint calls the Satisfactory Dedicated Server's [HTTPS API](https://satisfactory.wiki.gg/wiki/Dedicated_servers/HTTPS_API) (`QueryServerState`, port 7777) to report the number of online players. Some server configurations require a Bearer token for this call; the token is stored in AWS Systems Manager Parameter Store rather than a Lambda environment variable, so it can be rotated without a redeploy.
+
+To generate a long-lived token, run the following in the Satisfactory dedicated server console:
+
+```
+server.GenerateAPIToken
+```
+
+Then store it as a `SecureString` parameter (via the AWS Console, or the CLI) at the path the stack expects — `/<stack-name>/satisfactory/api-token`, e.g.:
+
+```bash
+aws ssm put-parameter \
+  --name "/satisfactory-server-2/satisfactory/api-token" \
+  --type SecureString \
+  --value "<token>" \
+  --overwrite
+```
+
+If the parameter doesn't exist or can't be read, `/status` still succeeds — it just omits the `Authorization` header on the game API call and reports `onlinePlayers`/`playerLimit` as `null`, logging a warning.
 
 ## Restoring from a backup AMI
 

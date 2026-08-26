@@ -11,6 +11,10 @@ type Ec2StateChangeDetail = {
     state: string;
 };
 
+/**
+ * EventBridge-triggered handler that creates a backup AMI whenever the
+ * Satisfactory EC2 instance transitions to `stopped`.
+ */
 export const handler = async (
     event: EventBridgeEvent<'EC2 Instance State-change Notification', Ec2StateChangeDetail>,
 ): Promise<void> => {

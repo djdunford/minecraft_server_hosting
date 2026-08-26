@@ -7,6 +7,18 @@ export type GameState = {
     playerLimit: number | null;
 };
 
+/**
+ * Calls `QueryServerState` on the Satisfactory Dedicated Server's HTTPS API to
+ * fetch the current online player count and limit.
+ *
+ * The server's certificate is self-signed by default, so certificate
+ * verification is disabled for this request.
+ *
+ * @param host - Public IP or hostname of the Satisfactory dedicated server.
+ * @param port - Game/API port (default 7777).
+ * @param token - Optional Bearer token, required only if the server enforces auth on this call.
+ * @throws If the request times out, fails, or the server responds with a non-200 status.
+ */
 export const queryServerState = (host: string, port: string, token?: string): Promise<GameState> =>
     new Promise((resolve, reject) => {
         const payload = JSON.stringify({ function: 'QueryServerState', data: {} });

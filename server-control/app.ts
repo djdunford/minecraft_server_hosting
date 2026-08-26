@@ -40,6 +40,14 @@ const getCognitoUser = (event: APIGatewayProxyEventV2WithJWTAuthorizer): Cognito
     };
 };
 
+/**
+ * Fetches the Satisfactory API Bearer token from Parameter Store.
+ *
+ * The token is stored out-of-band (see README) rather than as a Lambda env
+ * var so it can be rotated without a redeploy. Returns `undefined` — rather
+ * than throwing — if the parameter is missing or unreadable, so callers can
+ * proceed without auth.
+ */
 const getApiToken = async (): Promise<string | undefined> => {
     try {
         const result = await ssm.send(
@@ -55,6 +63,13 @@ const getApiToken = async (): Promise<string | undefined> => {
     }
 };
 
+/**
+ * Handles `GET /status`. Reports EC2 instance state/public IP, plus online
+ * player count and limit when the instance is running — the latter queried
+ * live from the Satisfactory Dedicated Server's HTTPS API. If that API call
+ * fails for any reason, player counts fall back to `null` rather than
+ * failing the whole request.
+ */
 const getStatus = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> => {
     const { status, publicIp } = await describeInstance();
 
@@ -133,6 +148,10 @@ const updateDns = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> =>
     return response(200, { message: 'DNS updated', ip: publicIp, domain: DOMAIN_NAME });
 };
 
+/**
+ * API Gateway entry point for the server-control API. Routes Cognito-authenticated
+ * requests to the `/status`, `/start`, `/stop`, and `/update-dns` handlers.
+ */
 export const handler = async (event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyResultV2> => {
     const user = getCognitoUser(event);
     try {
