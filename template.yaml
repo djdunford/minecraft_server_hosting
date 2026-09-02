@@ -221,9 +221,9 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: "ami-0f55dde1c8d03cbf3"
+      ImageId: "ami-0052c604556266c60"
       IamInstanceProfile: !Ref InstanceProfile
-      InstanceType: t3.2xlarge
+      InstanceType: r5a.large
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2InstanceLaunchTemplate
         Version: !GetAtt EC2InstanceLaunchTemplate.LatestVersionNumber
