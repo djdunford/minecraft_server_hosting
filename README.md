@@ -73,6 +73,24 @@ npm run lint
 
 Tests live in `server-control/tests/unit`.
 
+## Create a Portal user
+
+To create a brand new user in the admin portal and set a temporary password
+
+```bash
+aws cognito-idp admin-create-user --user-pool-id eu-west-2_DQEaQ0Ju3 --username username@domain.com --temporary-password Hello123
+```
+
+## Update a Portal user password
+
+```bash
+aws cognito-idp admin-set-user-password \
+  --user-pool-id "eu-west-2_DQEaQ0Ju3" \
+  --username "thomas6388@icloud.com" \
+  --password "arsenal" \
+  --no-permanent
+```
+
 ## Setting up the Satisfactory server on EC2
 
 Install steamcmd and the dedicated server:
