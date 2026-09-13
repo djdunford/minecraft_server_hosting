@@ -531,6 +531,48 @@ Resources:
         EntryPoints:
           - image.ts
 
+  ScheduledStopFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: server-control/
+      Handler: scheduled-stop.handler
+      Runtime: nodejs24.x
+      Architectures:
+        - x86_64
+      Timeout: 30
+      MemorySize: 256
+      LoggingConfig:
+        LogFormat: JSON
+      Environment:
+        Variables:
+          INSTANCE_ID: !Ref EC2Instance
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: ec2:StopInstances
+              Resource: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${EC2Instance}"
+      Events:
+        DailySchedule:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: "cron(0 23 * * ? *)"
+            ScheduleExpressionTimezone: Europe/London
+            FlexibleTimeWindow:
+              Mode: "OFF"
+            Input: '{}'
+            RetryPolicy:
+              MaximumEventAgeInSeconds: 3600
+              MaximumRetryAttempts: 2
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+          - scheduled-stop.ts
+
 Outputs:
   VPC:
     Description: A reference to the created VPC

@@ -1,4 +1,4 @@
-import { DescribeInstancesCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeInstancesCommand, EC2Client, StopInstancesCommand } from '@aws-sdk/client-ec2';
 
 const ec2 = new EC2Client({});
 
@@ -13,3 +13,7 @@ export const describeInstance = async () => {
         publicIp: instance?.PublicIpAddress ?? null,
     };
 };
+
+/** Requests that the configured EC2 instance stop. */
+export const stopInstance = async () =>
+    ec2.send(new StopInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
