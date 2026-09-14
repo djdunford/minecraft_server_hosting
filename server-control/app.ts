@@ -1,9 +1,9 @@
 import { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { EC2Client, StartInstancesCommand, StopInstancesCommand } from '@aws-sdk/client-ec2';
+import { EC2Client, StartInstancesCommand } from '@aws-sdk/client-ec2';
 import { ChangeResourceRecordSetsCommand, Route53Client } from '@aws-sdk/client-route-53';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { logError, logInfo, logWarn } from './logger';
-import { describeInstance } from './ec2';
+import { describeInstance, stopInstance } from './ec2';
 import { queryServerState } from './satisfactory-api';
 
 const ec2 = new EC2Client({});
@@ -106,7 +106,7 @@ const startServer = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> 
 };
 
 const stopServer = async (user: CognitoUser): Promise<APIGatewayProxyResultV2> => {
-    const result = await ec2.send(new StopInstancesCommand({ InstanceIds: [INSTANCE_ID] }));
+    const result = await stopInstance();
     const stateChange = result.StoppingInstances?.[0];
     const previousState = stateChange?.PreviousState?.Name ?? 'unknown';
     const currentState = stateChange?.CurrentState?.Name ?? 'unknown';

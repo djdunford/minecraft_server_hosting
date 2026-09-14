@@ -13,10 +13,11 @@ Deployed via AWS SAM (`template.yaml`) into a single CloudFormation stack:
   - `POST /start` — start the instance
   - `POST /stop` — stop the instance
   - `POST /update-dns` — upsert a Route 53 `A` record for the server's domain to the instance's current public IP
-- **Automatic backups** — a second Lambda (`server-control/image.ts`) is triggered by EventBridge whenever the instance transitions to `stopped` (including spot interruptions) and creates an AMI named `Satisfactory-<YYYYMMDDHHMM>`, tagged the same way, as a point-in-time backup of the server's save data.
+- **Automatic backups** — a Lambda (`server-control/image.ts`) is triggered by EventBridge whenever the instance transitions to `stopped` (including spot interruptions) and creates an AMI named `Satisfactory-<YYYYMMDDHHMM>`, tagged the same way, as a point-in-time backup of the server's save data.
+- **Scheduled shutdown** — a Lambda is invoked daily at 11:00pm UK time by EventBridge Scheduler and stops the EC2 instance. The schedule uses the `Europe/London` timezone, so it follows GMT/BST changes.
 - **DNS** — a Route 53 hosted zone provides both the portal's domain (aliased to CloudFront) and the server's domain (updated on demand via the API).
 
-Every API request is authenticated via Cognito, and the authenticated user's `sub`/`email` are attached to structured JSON logs emitted by both Lambdas for auditing.
+Every API request is authenticated via Cognito, and the authenticated user's `sub`/`email` are attached to structured JSON logs emitted by the API Lambda for auditing.
 
 ## Prerequisites
 
